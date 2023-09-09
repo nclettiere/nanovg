@@ -2,3 +2,6 @@
 	path = nanovg_repository
 	url = https://github.com/memononen/nanovg.git
 	branch = master
+[submodule "third/mlib"]
+	path = third/mlib
+	url = https://github.com/P-p-H-d/mlib.git
