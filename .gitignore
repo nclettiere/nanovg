@@ -35,3 +35,7 @@ build
 
 ## Python specific
 __pycache__
+
+.vs/*
+out/*
+build/*

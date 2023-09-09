@@ -5,18 +5,24 @@ SET(VERSION 0.1)
 INCLUDE(GNUInstallDirs)
 
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/src)
-ADD_COMPILE_OPTIONS(-Wall -Werror)
-ADD_LINK_OPTIONS(LINKER:--as-needed LINKER:--no-undefined LINKER:--no-allow-shlib-undefined)
 
-option(NANOVG_SHARED_LIBS "Build shared libraries" ON)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    add_compile_options(-Wall -Werror)
+    add_link_options(LINKER:--as-needed LINKER:--no-undefined LINKER:--no-allow-shlib-undefined)
+else()
+endif()
+
+option(NANOVG_SHARED_LIBS "Build shared libraries" OFF)
 option(NANOVG_STATIC_LIBS "Build static liraries" ON)
 option(NANOVG_BUILD_EXAMPLES "Build examples" ON)
-option(NANOVG_BUILD_GL2 "Build OpenGL 2" ON)
+option(NANOVG_BUILD_GL2 "Build OpenGL 2" OFF)
 option(NANOVG_BUILD_GL3 "Build OpenGL 3" ON)
-option(NANOVG_BUILD_GLES2 "Build OpenGL ES 2" ON)
+option(NANOVG_BUILD_GLES2 "Build OpenGL ES 2" OFF)
 option(NANOVG_BUILD_GLES3 "Build OpenGL ES 3" ON)
 option(NANOVG_BUILD_SVG "Build NanoSVG" ON)
-option(NANOVG_BUILD_OUI "Build OUI/Blendish" ON)
+option(NANOVG_BUILD_OUI "Build OUI/Blendish" OFF)
+option(NANOVG_USE_GLEW "Build with Glew" OFF)
+option(NANOVG_USE_GLAD "Build with Glad" ON) 
 option(NANOVG_USE_STB "Use stb-image" ON)
 option(NANOVG_USE_FREETYPE "Use freetype for fontstash" OFF)
 
@@ -30,8 +36,26 @@ SET(NANOSVG_SOURCES "src/nanosvg.c" "src/nanosvgrast.c")
 SET(NANOVG_OUI_DEFINES "")
 SET(NANOVG_OUI_SOURCES "src/oui.c" "src/blendish.c")
 
+IF(NANOVG_USE_GLAD)
+  SET(NANOVG_GL_LOADER "Glad")
+  SET(NANOVG_GL_LOADER_DEF "NANOVG_USE_GLAD")
+ELSEIF(NANOVG_USE_GLEW)
+  SET(NANOVG_GL_LOADER "Glew")
+  SET(NANOVG_GL_LOADER_DEF "NANOVG_USE_GLEW")
+ELSEIF(NANOVG_USE_GLEW AND NANOVG_USE_GLAD)
+  message(FATAL_ERROR "Multiple OpenGL loader libraries specified.")
+ELSE()
+  message(FATAL_ERROR "No OpenGL loader library specified. (Glad or Glew)")
+ENDIF()
+
+if(WIN32)
+  set(NANOVG_PLAT_GL_LIB "OpenGl32.lib")
+else()
+  set(NANOVG_PLAT_GL_LIB "GL")
+endif()
+
 IF(NANOVG_BUILD_GL2 OR NANOVG_BUILD_GL3)
-  LIST(APPEND NANOVG_GL_DEFINES NANOVG_USE_GLEW)
+  LIST(APPEND NANOVG_GL_DEFINES ${NANOVG_GL_LOADER_DEF})
 ENDIF()
 
 IF(NANOVG_USE_FREETYPE)
@@ -125,7 +149,7 @@ ENDIF()
 
 SET(NANOVG_DEPENDENCIES m)
 IF(NANOVG_BUILD_GL2 OR NANOVG_BUILD_GL3)
-  SET(NANOVG_DEPENDENCIES GLEW GL ${NANOVG_DEPENDENCIES})
+  SET(NANOVG_DEPENDENCIES ${NANOVG_GL_LOADER} GL ${NANOVG_DEPENDENCIES})
 ELSE()
   IF(NANOVG_BUILD_GLES2)
     SET(NANOVG_DEPENDENCIES GLESv2 ${NANOVG_DEPENDENCIES})
@@ -195,7 +219,7 @@ IF(NANOVG_BUILD_GL2)
   ADD_EXECUTABLE(example_gl2
     example/example_gl2.c example/demo.c example/perf.c
     $<TARGET_OBJECTS:nanovg> $<TARGET_OBJECTS:nanovg_gl2>)
-  TARGET_LINK_LIBRARIES(example_gl2 PRIVATE nanovg nanovg_gl2 GLEW EGL GL glfw m)
+  TARGET_LINK_LIBRARIES(example_gl2 PRIVATE nanovg nanovg_gl2 ${NANOVG_GL_LOADER} EGL ${NANOVG_PLAT_GL_LIB} glfw m)
   TARGET_COMPILE_DEFINITIONS(example_gl2 PRIVATE ${NANOVG_GL_DEFINES} NANOVG_GL2)
 ENDIF()
 
@@ -203,13 +227,13 @@ IF(NANOVG_BUILD_GL3)
   ADD_EXECUTABLE(example_gl3
     example/example_gl3.c example/demo.c example/perf.c
     $<TARGET_OBJECTS:nanovg> $<TARGET_OBJECTS:nanovg_gl3>)
-  TARGET_LINK_LIBRARIES(example_gl3 PRIVATE nanovg nanovg_gl3 GLEW EGL GL glfw m)
+  TARGET_LINK_LIBRARIES(example_gl3 PRIVATE nanovg nanovg_gl3 ${NANOVG_GL_LOADER} EGL ${NANOVG_PLAT_GL_LIB} glfw m)
   TARGET_COMPILE_DEFINITIONS(example_gl3 PRIVATE ${NANOVG_GL_DEFINES} NANOVG_GL3)
 ENDIF()
 
 IF(NANOVG_BUILD_GL3)
   ADD_EXECUTABLE(example_fbo example/example_fbo.c example/demo.c example/perf.c $<TARGET_OBJECTS:nanovg> $<TARGET_OBJECTS:nanovg_gl3>)
-  TARGET_LINK_LIBRARIES(example_fbo PRIVATE nanovg_gl3 GLEW EGL GL glfw m)
+  TARGET_LINK_LIBRARIES(example_fbo PRIVATE nanovg_gl3 ${NANOVG_GL_LOADER} EGL ${NANOVG_PLAT_GL_LIB} glfw m)
   TARGET_COMPILE_DEFINITIONS(example_fbo PRIVATE ${NANOVG_GL_DEFINES} NANOVG_GL3)
 ENDIF()
 
@@ -217,7 +241,7 @@ IF(NANOVG_BUILD_GLES2)
   ADD_EXECUTABLE(example_gles2
     example/example_gles2.c example/demo.c example/perf.c
     $<TARGET_OBJECTS:nanovg> $<TARGET_OBJECTS:nanovg_gles2>)
-  TARGET_LINK_LIBRARIES(example_gles2 PRIVATE GLEW EGL GL glfw m)
+  TARGET_LINK_LIBRARIES(example_gles2 PRIVATE ${NANOVG_GL_LOADER} EGL ${NANOVG_PLAT_GL_LIB} glfw m)
   TARGET_COMPILE_DEFINITIONS(example_gles2 PRIVATE NANOVG_GLES2)
 ENDIF()
 
@@ -225,29 +249,29 @@ IF(NANOVG_BUILD_GLES3)
   ADD_EXECUTABLE(example_gles3
     example/example_gles3.c example/demo.c example/perf.c
     $<TARGET_OBJECTS:nanovg> $<TARGET_OBJECTS:nanovg_gles3>)
-  TARGET_LINK_LIBRARIES(example_gles3 PRIVATE GLEW EGL GL glfw m)
+  TARGET_LINK_LIBRARIES(example_gles3 PRIVATE ${NANOVG_GL_LOADER} EGL ${NANOVG_PLAT_GL_LIB} glfw m)
   TARGET_COMPILE_DEFINITIONS(example_gles3 PRIVATE NANOVG_GLES3)
 ENDIF()
 
 IF(NANOVG_BUILD_SVG)
 ADD_EXECUTABLE(example_svg1 example/example_svg1.c $<TARGET_OBJECTS:nanovg> $<TARGET_OBJECTS:nanosvg>)
-TARGET_LINK_LIBRARIES(example_svg1 PRIVATE GLEW EGL GL glfw m)
+TARGET_LINK_LIBRARIES(example_svg1 PRIVATE ${NANOVG_GL_LOADER} EGL ${NANOVG_PLAT_GL_LIB} glfw m)
 
 ADD_EXECUTABLE(example_svg2 example/example_svg2.c $<TARGET_OBJECTS:nanovg> $<TARGET_OBJECTS:nanosvg>)
-TARGET_LINK_LIBRARIES(example_svg2 PRIVATE GLEW EGL GL glfw m)
+TARGET_LINK_LIBRARIES(example_svg2 PRIVATE ${NANOVG_GL_LOADER} EGL ${NANOVG_PLAT_GL_LIB} glfw m)
 ENDIF()
 
 IF(NANOVG_BUILD_GL3 AND NANOVG_BUILD_OUI)
   ADD_EXECUTABLE(example_oui
     example/example_oui.c
     $<TARGET_OBJECTS:nanovg> $<TARGET_OBJECTS:nanovg_gl3> $<TARGET_OBJECTS:nanovg_oui>)
-  TARGET_LINK_LIBRARIES(example_oui PRIVATE GLEW EGL GL glfw m)
+  TARGET_LINK_LIBRARIES(example_oui PRIVATE ${NANOVG_GL_LOADER} EGL ${NANOVG_PLAT_GL_LIB} glfw m)
   TARGET_COMPILE_DEFINITIONS(example_oui PRIVATE DATADIR="../data")
 ENDIF()
 
 IF(NANOVG_BUILD_GL2 AND NANOVG_BUILD_GL3 AND NANOVG_BUILD_GLES2 AND NANOVG_BUILD_GLES3)
   ADD_EXECUTABLE(example_gl_wrapper example/example_gl_wrapper.c example/demo.c $<TARGET_OBJECTS:nanovg>)
-  TARGET_LINK_LIBRARIES(example_gl_wrapper PRIVATE ${NANOVG_LIB_NAMES} GLEW EGL GL glfw m)
+  TARGET_LINK_LIBRARIES(example_gl_wrapper PRIVATE ${NANOVG_LIB_NAMES} ${NANOVG_GL_LOADER} EGL ${NANOVG_PLAT_GL_LIB} glfw m)
 ENDIF()
 
 ENDIF()
